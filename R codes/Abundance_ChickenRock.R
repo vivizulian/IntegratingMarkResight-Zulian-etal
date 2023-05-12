@@ -20,35 +20,8 @@
 
 rm(list=ls())
 
-load("Q:/My Drive/Red Snapper/RCodes/Red-Snapper-Abundance/Data/ChickenRockData.RData")
-
-#Run using only the period #5:
-#Take subset of the data:
-unm <- u[,1:max(Nframes[,5]),5]
-mar <- m[,1:max(Nframes[,5]),5]
-y <- y[,1:max(Nframes[,5]),5]
-#
-# #Take a subset of frames and delete camera 13:
-unm <- unm[-13,1:24]
-mar <- mar[-13,1:24]
-y <- y[-13,1:24]
-       
-n <- matrix(NA, nrow(y), ncol(y))
-
-for(k in 1:nrow(n)){
-  for(l in 1:ncol(n)){
-    n[k,l] <- y[k,l] + unm[k,l] + mar[k,l]  #total counts
-  }
-}
-
-Mtotal <- Nreef[5]
-
-#Current direction covariate
-curDir <- chic_rock_covs[,"currDirec",5] #period 5
-curDir <- curDir[!is.na(curDir)] 
-
-Area_StateSpace <- 1.6
-x <- curDir
+#load the data set:
+#load(".../RedSnapper_ChickenRockData.RData")
 
 library(jagsUI)
 
@@ -89,25 +62,25 @@ cat("
       
     lambda ~ dgamma(0.01, 0.01)
     
-  }#model", fill=TRUE, file="Nmix.txt")
+  }#model", fill=TRUE, file="NMix.txt")
 
 # JAGS data
 str(jags.data <- list(J=nrow(n), K=ncol(n), n=n, Area = Area_StateSpace, 
-                      curr=x+1, ncurr=max(x)+1))
+                      curr=curDir+1, ncurr=max(curDir)+1))
 
 Nst <- apply(n, 1, max, na.rm=T)+3
 inits <- function() list(Nlocal = Nst) #lambda=runif(1,.01,0.02)
 
 # Parameters monitored
-params <- c("lambda", "alpha0", "sd", "Nlocal", "Ntotal", "p", "eff.area"
+params <- c("lambda", "alpha0", "sd", "Nlocal", "Ntotal", "p", "eff.area")
 
 #MCMC settings
-#nc <- 3; nt <- 10;  ni <- 500;  nb <- 50;  n.adapt <- 20
+#nc <- 3; nt <- 10;  ni <- 500;  nb <- 50;  n.adapt <- 20 #test
 nc <- 3; n.adapt <- 70000; nb <- 5000; ni <- 500000+nb; nt <- 100 
 
 
 # Call JAGS
-out <- jags(jags.data, inits, params, "Nmix.txt",
+out <- jags(jags.data, inits, params, "NMix.txt",
             n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb,
             n.adapt = n.adapt, parallel=T)
 
@@ -118,13 +91,9 @@ out <- jags(jags.data, inits, params, "Nmix.txt",
 library(mcmcOutput)
 mcmcOutput::diagPlot(out, params = c("lambda", 'alpha1', "alpha0", "p"))
 
-library(here)
-
-#here('Output', "ChickenRock")
-save(out, file="ResultNMixt_ChickenRockRandomEff.RData")
 
 ############################################
-#Model 2 - Multinomial N-Mixture Model
+#Model 2 - Marked N-Mixture Model
 ############################################
 
 #B. Model using the marked/unmarked/unknown data sets:
@@ -134,7 +103,7 @@ save(out, file="ResultNMixt_ChickenRockRandomEff.RData")
 # JAGS data
 str(jags.data <- list(J=nrow(n), K=ncol(n), m=mar, u=unm, y=y, 
                       Area_StateSpace = Area_StateSpace, 
-                      Mtotal=Mtotal, x=x+1, ncurr=max(x)+1))
+                      Mtotal=Mtotal, curDir=curDir+1, ncurr=max(curDir)+1))
 
 cat("
     model {
@@ -172,7 +141,7 @@ cat("
 
       # # parameterization 4: logit-scale effect.   
       for(j in 1:J){
-       logit(delta[j]) <- beta0[x[j]] + eps[j]
+       logit(delta[j]) <- beta0[curDir[j]] + eps[j]
        eps[j] ~ dnorm(0, tau)
       }
        
@@ -183,7 +152,7 @@ cat("
         beta0[r] ~ dnorm(0, 0.01)
       }
 
-    }#model", fill=TRUE, file="NmixWithKnownMarked.txt")
+    }#model", fill=TRUE, file="MarkedNMix.txt")
 
 
 #intial values
@@ -204,20 +173,17 @@ params <- c("lambda", "p","theta","phi", "beta0" ,"Ntotal",
             "delta", "sd", "M", "U", "N")
 
 #MCMC settings
-#nc <- 3; nt <- 5;  ni <- 2000;  nb <- 500;  n.adapt <- 200
+#nc <- 3; nt <- 5;  ni <- 2000;  nb <- 500;  n.adapt <- 200 test
 nc <- 3; n.adapt <- 70000; nb <- 5000; ni <- 500000+nb; nt <- 100 
 
 # Call JAGS 
-out2 <- jags(jags.data, inits, params, "NmixWithKnownMarked.txt", 
+out2 <- jags(jags.data, inits, params, "MarkedNMix.txt", 
             n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, 
             n.adapt = n.adapt, parallel=T) 
 
 ## Plot the chains:
 library(mcmcOutput)
 mcmcOutput::diagPlot(out2, params = c("delta", "lambda", "p", "phi", "theta"))
-
-resultsChickenRockPeriod1 <- list(out, out2)
-save(resultsChickenRockPeriod1, file="Output/ChickenRock/resultsChickenRockPeriod1.RData")
 
 
 ##################################################################
