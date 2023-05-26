@@ -41,8 +41,7 @@ cat("
           n[j,k] ~ dbin(p[j], Nlocal[j])
           
         }#K
-        logit(p[j]) <- alpha0[curr[j]] #+ eps[j]
-        #eps[j] ~ dnorm(0, tau)
+        logit(p[j]) <- alpha0[curr[j]]
       }#J
 
     #Derived abundance for the entire area
@@ -53,9 +52,6 @@ cat("
     #p.eff.area <- eff.area/Area #estimated proportion of area surveyed by one frame
   
     # Priors
-    tau <- pow(sd, 2)
-    sd ~ dgamma(0.01,0.01)
-      
     for(r in 1:ncurr){
       alpha0[r] ~ dnorm(0, 0.01)
     }
@@ -72,7 +68,7 @@ Nst <- apply(n, 1, max, na.rm=T)+3
 inits <- function() list(Nlocal = Nst) #lambda=runif(1,.01,0.02)
 
 # Parameters monitored
-params <- c("lambda", "alpha0", "sd", "Nlocal", "Ntotal", "p", "eff.area")
+params <- c("lambda", "alpha0", "Nlocal", "Ntotal", "p", "eff.area")
 
 #MCMC settings
 #nc <- 3; nt <- 10;  ni <- 500;  nb <- 50;  n.adapt <- 20 #test
@@ -89,7 +85,7 @@ out <- jags(jags.data, inits, params, "NMix.txt",
 
 ## Plot the chains:
 library(mcmcOutput)
-mcmcOutput::diagPlot(out, params = c("lambda", 'alpha1', "alpha0", "p"))
+mcmcOutput::diagPlot(out, params = c("lambda", "alpha0", "p"))
 
 
 ############################################
@@ -141,7 +137,7 @@ cat("
 
       # # parameterization 4: logit-scale effect.   
       for(j in 1:J){
-       logit(delta[j]) <- beta0[curDir[j]] + eps[j]
+       logit(delta[j]) <- gamma0[curDir[j]] + eps[j]
        eps[j] ~ dnorm(0, tau)
       }
        
@@ -149,7 +145,8 @@ cat("
       sd ~ dgamma(0.01,0.01)
       
       for(r in 1:ncurr){
-        beta0[r] ~ dnorm(0, 0.01)
+        gamma0[r] <- logit(p_gamma0[r])
+        p_gamma0[r] ~ dbeta(1,1)
       }
 
     }#model", fill=TRUE, file="MarkedNMix.txt")
@@ -166,11 +163,11 @@ inits <- function() list(p=runif(1,.06,0.1),
                          U=U_inits,
                          M=M_inits, 
                          phi=runif(1,.15,0.30), 
-                         theta=runif(1,.6,0.9)) #beta1= runif(3,-1,0) Ntotal=Nst,
+                         theta=runif(1,.6,0.9)) #Ntotal=Nst,
 
 # Parameters monitored
-params <- c("lambda", "p","theta","phi", "beta0" ,"Ntotal",
-            "delta", "sd", "M", "U", "N")
+params <- c("lambda", "p","theta","phi", "gamma0" ,"Ntotal",
+            "delta", "sd", "p_gamma0")#, "M", "U", "N")
 
 #MCMC settings
 #nc <- 3; nt <- 5;  ni <- 2000;  nb <- 500;  n.adapt <- 200 test
@@ -183,7 +180,7 @@ out2 <- jags(jags.data, inits, params, "MarkedNMix.txt",
 
 ## Plot the chains:
 library(mcmcOutput)
-mcmcOutput::diagPlot(out2, params = c("delta", "lambda", "p", "phi", "theta"))
+mcmcOutput::diagPlot(out2, params = c("delta", "lambda", "p", "phi", "theta", "gamma0"))
 
 
 ##################################################################
@@ -198,7 +195,7 @@ mcmcOutput::diagPlot(out2, params = c("delta", "lambda", "p", "phi", "theta"))
 # (4) Plot observed Mean counts vs. predicted Mean counts
 
 #Exclude the counts from one camera each time:
-ncam <- 24
+ncam <- 31
 
 #Try to create an empty list to hold the results
 resultsMarkedNMixRaEff <- list()
@@ -240,8 +237,8 @@ for(k in 1:ncam){
   cat(paste('\n*** Trial nr.', k, 'out of 24 ***\n'))
   
   # Parameters monitored
-  params <- c("lambda", "p","theta","phi", "beta0" ,"Ntotal",
-              "delta", "sd", "m", "u", "y")
+  params <- c("lambda", "p","theta","phi", "gamma0" ,"Ntotal",
+              "delta", "sd", "p_gamma0") #, "m", "u", "y")
   
   #MCMC settings
   #nc <- 3; nt <- 5;  ni <- 2000;  nb <- 500;  n.adapt <- 200
@@ -282,40 +279,111 @@ for(k in 1:ncam){
 }
 
 
+#### Cross-Validation processing ####
+
+### Random effect model:
+
+#load results
+load("Q:/My Drive/Red Snapper/RCodes/Red-Snapper-Abundance/Output/ChickenRock/resultsMarkedNMixRaEff_crossVal.RData")
+
+pred_mar <- var_mar <- predMar.CRI025 <- predMar.CRI975 <- pred_unmar <- var_unmar <- predUnmar.CRI025 <- predUnmar.CRI975 <-
+  pred_unk <- var_unk <- predUnk.CRI025 <- predUnk.CRI975 <- matrix(NA, 31, 24)
+
+ncam = 24
+for(i in 1:ncam){
+  pred_mar[i,] <- resultsMarkedNMixRaEff[[i]]$pred_mar[i,]
+  var_mar[i,] <- resultsMarkedNMixRaEff[[i]]$var_mar[i,]
+  predMar.CRI025[i,] <- resultsMarkedNMixRaEff[[i]]$predMar.CRI025[i,]
+  predMar.CRI975[i,] <- resultsMarkedNMixRaEff[[i]]$predMar.CRI975[i,]
+  pred_unmar[i,] <- resultsMarkedNMixRaEff[[i]]$pred_unmar[i,]
+  var_unmar[i,] <- resultsMarkedNMixRaEff[[i]]$var_unmar[i,]
+  predUnmar.CRI025[i,] <- resultsMarkedNMixRaEff[[i]]$predUnmar.CRI025[i,]
+  predUnmar.CRI975[i,] <- resultsMarkedNMixRaEff[[i]]$predUnmar.CRI975[i,]
+  pred_unk[i,] <- resultsMarkedNMixRaEff[[i]]$pred_unk[i,]
+  var_unk[i,] <- resultsMarkedNMixRaEff[[i]]$var_unk[i,]
+  predUnk.CRI025[i,] <- resultsMarkedNMixRaEff[[i]]$predUnk.CRI025[i,]
+  predUnk.CRI975[i,] <- resultsMarkedNMixRaEff[[i]]$predUnk.CRI975[i,]
+}
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+mean(out2$sims.list$lambda)
+mean(out2$sims.list$Ntotal)
+
+median(out2$sims.list$p)
+quantile(out2$sims.list$p, probs=c(0.025, 0.975))
+
+median(out2$sims.list$theta)
+quantile(out2$sims.list$theta, probs=c(0.025, 0.975))
+
+median(out2$sims.list$phi)
+quantile(out2$sims.list$phi, probs=c(0.025, 0.975))
 
 #away=0, sideways=1, and towards=2
 
-away <- as.data.frame(cbind(out2$sims.list$beta0[,1], rep("away", length(out2$sims.list$beta0[,1]))))
-sideways <- as.data.frame(cbind(out2$sims.list$beta0[,2], rep("sideways", length(out2$sims.list$beta0[,2]))))
-towards <- as.data.frame(cbind(out2$sims.list$beta0[,3], rep("towards", length(out2$sims.list$beta0[,3]))))
+away <- as.data.frame(cbind(out2$sims.list$p_gamma0[,1], rep("away", length(out2$sims.list$p_gamma0[,1]))))
+round(mean(as.numeric(away$V1)*Area_StateSpace),3)
+round(quantile(as.numeric(away$V1)*Area_StateSpace, probs=c(0.025, 0.975)),3)
+
+sideways <- as.data.frame(cbind(out2$sims.list$p_gamma0[,2], rep("sideways", length(out2$sims.list$p_gamma0[,2]))))
+round(mean(as.numeric(sideways$V1)*Area_StateSpace),3)
+round(quantile(as.numeric(sideways$V1)*Area_StateSpace, probs=c(0.025, 0.975)),3)
+
+towards <- as.data.frame(cbind(out2$sims.list$p_gamma0[,3], rep("towards", length(out2$sims.list$p_gamma0[,3]))))
+round(mean(as.numeric(towards$V1)*Area_StateSpace),3)
+round(quantile(as.numeric(towards$V1)*Area_StateSpace, probs=c(0.025, 0.975)),3)
 
 current <- rbind(away, sideways, towards)
 
-current$V3 <- plogis(as.numeric(current$V1))
-current$area <- current$V3*Area_StateSpace
+Area_StateSpace <- 1.6
+#current$V3 <- plogis(as.numeric(current$V1))
+current$area <- as.numeric(current$V1)*Area_StateSpace
+
+library(tidyverse)
+ci <- current %>%
+  group_by(V2) %>%
+  summarise(lower.ci = round(quantile(area, probs = c(0.025)),3),
+            upper.ci = round(quantile(area, probs = c(0.975)),3),
+            med = round(median(area),3))
 
 
 #Plot the results:
 require(ggplot2)
 library(ggforce)
-(Curr <- ggplot(current, aes(y = as.numeric(area), x = V2, fill=V2)) + 
-    geom_violin() + theme_bw() +
-    #geom_sina(alpha=0.01, size=0.01) + 
-    geom_boxplot(width=0.04, fill="white", outlier.shape = NA) + 
-    #stat_summary(fun = "median", geom = "crossbar", width = 0.1, colour = "black", position = position_dodge(0.9)) +
-    #geom_line(aes(y = meanNstarSigma2, x=covs), size=1) + 
-    #geom_hline(yintercept=c(Nstar_Sigma0, Nstar_Sigma1, meanNstarSigma2), linetype="dashed", size=1) + 
+(Curr <- ggplot() + 
+    geom_violin(data = current, aes(y = as.numeric(area), x = V2, fill=V2), color=NA) + theme_bw() +
+    #stat_summary(fun = "median", geom = "pointrange", position = position_dodge(0.9)) + # fun.min = min, fun.max = max, linewidth = 2, size = 0.5, colour = "black") + #geom = "pointrange", , position = position_dodge(0.9)) +
     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
           plot.title = element_text(hjust = 0.5), text = element_text(size = 17), 
           axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15),
           legend.position = NULL) + #c(0.15, 0.87)) + 
-    ylim(0,1) +
+    ylim(0,0.4) +
+    geom_linerange(data = ci, aes(x = V2, ymax = upper.ci, ymin = lower.ci), color="black", lwd = 1) +
+  geom_point(data = ci, aes(x = V2, y = med), color = 'black', size = 3) +
     labs(y = "Effective sampling area (km2)", x="Current direction") + 
     scale_fill_manual(values = c("#CCCCCC", "#CCCCCC", "#CCCCCC")) +  
     scale_x_discrete(labels = c("Away", "Sideways", "Towards")))
 
+#
+#geom_sina(alpha=0.01, size=0.01) + 
+#geom_boxplot(width=0.04, fill="white", outlier.shape = NA) + 
+#geom_point(current, mapping = aes(as.numeric(area), )) +
 
 PerCam <- as.data.frame(cbind(out2$mean$delta, out2$mean$delta*Area_StateSpace, curDir))
 
@@ -340,3 +408,52 @@ library(ggforce)
     scale_x_discrete(labels = c("Away", "Sideways", "Towards")))
 
 
+
+
+## sims.list of delta is all the posteriors for the 31 cameras
+
+ESAcameras <- out2$sims.list$delta*Area_StateSpace
+meanESAcam <- colMeans(ESAcameras)
+medianESAcam <- apply(ESAcameras, 2, median)
+Ci25ESAcam <- apply(ESAcameras, 2, quantile, probs=c(0.025))
+Ci975ESAcam <- apply(ESAcameras, 2, quantile, probs=c(0.975))
+
+ESAcams <- cbind(seq(1:31), meanESAcam, medianESAcam, Ci25ESAcam, Ci975ESAcam, curDir)
+ESAcams[,6] <- ifelse(ESAcams[,6]==0, paste("Away"), ESAcams[,6])
+ESAcams[,6] <- ifelse(ESAcams[,6]==1, paste("Sideways"), ESAcams[,6])
+ESAcams[,6] <- ifelse(ESAcams[,6]==2, paste("Towards"), ESAcams[,6])
+
+ESAcams <- as.data.frame(ESAcams)
+
+library(tidyverse)
+ci <- ESAcams %>%
+  group_by(curDir) %>%
+  summarise(lower.ci = round(quantile(as.numeric(meanESAcam), probs = c(0.025)),3),
+            upper.ci = round(quantile(as.numeric(meanESAcam), probs = c(0.975)),3),
+            med = round(mean(as.numeric(meanESAcam)),3))
+
+ci$med
+
+#Plot the results:
+require(ggplot2)
+library(ggforce)
+(Curr <- ggplot(ESAcams, aes(y = as.numeric(meanESAcam), x = as.factor(V1), color=curDir)) + 
+    
+    #annotate(geom = "rect", ymin=ci$lower.ci[1], ymax=ci$upper.ci[1],
+    #         xmin=-Inf, xmax=Inf, fill="gray", alpha=0.4) +
+    #annotate(geom = "rect", ymin=ci$lower.ci[2], ymax=ci$upper.ci[2],
+    #         xmin=-Inf, xmax=Inf, fill="orange", alpha=0.1) +
+    #annotate(geom = "rect", ymin=ci$lower.ci[3], ymax=ci$upper.ci[3],
+    #         xmin=-Inf, xmax=Inf, fill="blue", alpha=0.1) +
+    
+    geom_point(size=3) + theme_bw() +
+    geom_linerange(data = ESAcams, aes(x = V1, ymax = as.numeric(Ci975ESAcam), ymin = as.numeric(Ci25ESAcam)),lwd = 1) +
+    geom_hline(yintercept=c(ci$med[1], ci$med[2], ci$med[3]), linetype="dashed", size=1, color=c("#000000", "#E69F00", "#56B4E9")) + 
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+          plot.title = element_text(hjust = 0.5), text = element_text(size = 17), 
+          axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15),
+          legend.position = c(0.15, 0.87)) + 
+    ylim(0,1.6) +
+    labs(y = "Effective sampling area (km2)", x="Camera", colour="Current direction") + 
+    scale_color_manual(values = c("#000000", "#E69F00", "#56B4E9")))# +  
+    #scale_x_discrete(labels = c("Away", "Sideways", "Towards")))
