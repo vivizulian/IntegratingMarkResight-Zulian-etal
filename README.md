@@ -1,4 +1,5 @@
-#Manuscript: Integrating mark-resight and count data to estimate effective sampling area and fish density.
+Codes and data related to:
+Manuscript: Integrating mark-resight and count data to estimate effective sampling area and fish density.
 
 Authors: Viviane Zulian, Krishna Pacifici, Nathan M. Bacheler, Jeffrey A. Buckel, William F. Patterson III,
 Brian J. Reich, Kyle W. Shertzer, Nathan J. Hostetter
