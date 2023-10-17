@@ -29,6 +29,10 @@
 
 library(jagsUI)
 
+#MCP from each individual divided by 1000000 to convert to km2:
+#P.S.: We have values for 15 individuals instead of 16, because one of the individuals had only 2 detections. 
+MCP <- c(38883,4677,3263,31568,56705,3108,60897,8698,121772,3600,62192,50985,5719,7120,5940)/1000000
+
 ## Model 1 - Binomial N-Mixture Model
 
 cat("
@@ -48,6 +52,17 @@ cat("
     #Not possible to estimate the total abundance, because we don't know ESA of each camera.
     Ntotal ~ dpois(lambda*Area) 
 
+    for(i in 1:15){
+      MCP_area[i] ~ dgamma(a, b)
+    }
+
+    a ~ dgamma(0.1,0.1) # prior
+    b ~ dgamma(0.1,0.1) # prior
+
+    meanMCP <- a/b # expected value
+    
+    D <- lambda/meanMCP
+
     # Priors
     for(r in 1:ncurr){
       alpha0[r] ~ dnorm(0, 0.01)
@@ -58,13 +73,13 @@ cat("
 
 # JAGS data
 str(jags.data <- list(J=nrow(n), K=ncol(n), n=n, Area = Area_StateSpace, 
-                      curr=curDir+1, ncurr=max(curDir)+1))
+                      curr=curDir+1, ncurr=max(curDir)+1, MCP_area = MCP))
 
 Nst <- apply(n, 1, max, na.rm=T)+3
 inits <- function() list(Nlocal = Nst)
 
 # Parameters monitored
-params <- c("lambda", "alpha0", "Nlocal", "Ntotal", "p", "eff.area")
+params <- c("lambda", "meanMCP", "D")
 
 # MCMC settings
 #nc <- 3; nt <- 10;  ni <- 500;  nb <- 50;  n.adapt <- 20 #test
@@ -85,6 +100,7 @@ mcmcOutput::diagPlot(out, params = c("lambda", "alpha0", "p")) #Check convergenc
 
 
 
+
 ## Model 2 - Marked N-Mixture Model
 
 ## Model using the marked/unmarked/unknown data sets:
@@ -101,8 +117,8 @@ cat("
            
     #Likelihoods
     # processes at state-space level
-    Ntotal ~ dpois(lambda*Area_StateSpace) # is this just a prediction?
-    Mtotal ~ dbin(phi, Ntotal) #!!! Mtotal is known!!!
+    Ntotal ~ dpois(lambda*Area_StateSpace) 
+    Mtotal ~ dbin(phi, Ntotal)
     Utotal <- Ntotal-Mtotal
 
     # Abundance at camera sites
@@ -111,7 +127,7 @@ cat("
       U[j] ~ dbin(delta[j], Utotal) 
       N[j] <- M[j]+ U[j]
 
-      # counts by frame. lack of independence among count types may affect CrI coverage? 
+      # counts by fram
       for (k in 1:K) {	# frames
         m[j,k] ~ dbin(p*theta, M[j])
         u[j,k] ~ dbin(p*theta, U[j])
