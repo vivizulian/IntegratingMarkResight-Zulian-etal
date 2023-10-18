@@ -65,7 +65,8 @@ cat("
 
     # Priors
     for(r in 1:ncurr){
-      alpha0[r] ~ dnorm(0, 0.01)
+      alpha0[r] <- logit(p_alpha0[r])
+      p_alpha0[r] ~ dbeta(1,1)
     }
     lambda ~ dgamma(0.01, 0.01)
     
@@ -79,7 +80,7 @@ Nst <- apply(n, 1, max, na.rm=T)+3
 inits <- function() list(Nlocal = Nst)
 
 # Parameters monitored
-params <- c("lambda", "meanMCP", "D")
+params <- c("lambda", "meanMCP", "D", "alpha0", "Nlocal", "Ntotal", "p", "eff.area")
 
 # MCMC settings
 #nc <- 3; nt <- 10;  ni <- 500;  nb <- 50;  n.adapt <- 20 #test
